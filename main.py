@@ -13,8 +13,8 @@ import shutil
 from datetime import datetime
 from telebot import types
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8463349327:AAEHCXtmznGBEhq41FPYH9Q1f6NPBvKdnIc')
-DEVELOPER_ID = int(os.environ.get('DEVELOPER_ID', '7951916432'))
+BOT_TOKEN = os.environ.get('BOT_TOKEN', ':8877117518:AAHxjM3lOV1R0WVCIjdHPAmDfOovmuZQB7Q')
+DEVELOPER_ID = int(os.environ.get('DEVELOPER_ID', '7093128950'))
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML')
 
