@@ -1338,7 +1338,7 @@ def support_markup():
         style='danger', icon_custom_emoji_id=EMOJI_IDS[14]))
     markup.add(types.InlineKeyboardButton("❓ استفسار عام", callback_data="support_inquiry",
         style='primary', icon_custom_emoji_id=EMOJI_IDS[1]))
-    markup.add(types.InlineKeyboardButton("🔍 بيانات مشكوك بها", callback_data="support_suspicious",
+    markup.add(types.InlineKeyboardButton("🔍 بيانات مشكوق بها", callback_data="support_suspicious",
         style='success', icon_custom_emoji_id=EMOJI_IDS[19]))
     markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="back_main",
         style='success', icon_custom_emoji_id=E_BACK))
@@ -2199,155 +2199,85 @@ def handle_all_messages(message):
                 if message.content_type == 'text':
                     bot.send_message(target, f"📨 رسالة من الإدارة:\n\n{text}")
                 elif message.content_type == 'photo':
-                    bot.send_photo(target, message.photo[-1].file_id,
-                                   caption=f"📨 رسالة من الإدارة:\n\n{message.caption or ''}")
-                elif message.content_type == 'video':
-                    bot.send_video(target, message.video.file_id,
-                                   caption=f"📨 رسالة من الإدارة:\n\n{message.caption or ''}")
-                bot.send_message(chat_id, f"✅ تم إرسال الرسالة للمستخدم {target}")
+                    bot.send_photo(target, message.photo[-1].file_id, caption=f"📨 رسالة من الإدارة:\n\n{message.caption or ''}")
+                bot.send_message(chat_id, "✅ تم إرسال الرسالة بنجاح.")
             except Exception as e:
                 bot.send_message(chat_id, f"❌ فشل الإرسال: {e}")
         clear_state(user_id)
         return
 
-    if state == 'admin_search_user_id':
-        if not is_admin(user_id):
-            return
+    if state == 'admin_set_price':
+        skey = get_data(user_id, 'price_service_key')
         if message.content_type == 'text':
             try:
-                target = int(text.strip())
-                row, orders_cnt = get_user_info(target)
-                if row:
-                    ref_cnt = get_referral_count(target)
-                    status_text = "🚫 محظور" if row['is_banned'] else "✅ نشط"
-                    info = (
-                        f"🔍 <b>بيانات المستخدم</b>\n\n"
-                        f"👤 ID: <code>{row['user_id']}</code>\n"
-                        f"👤 الاسم: {row['first_name']}\n"
-                        f"🌐 اليوزر: @{row['username'] or 'بدون'}\n"
-                        f"📅 تاريخ الانضمام: {row['joined_at']}\n"
-                        f"📊 الحالة: {status_text}\n"
-                        f"📦 عدد الطلبات: {orders_cnt}\n"
-                        f"👥 عدد الإحالات: {ref_cnt}"
-                    )
-                    markup = types.InlineKeyboardMarkup()
-                    if row['is_banned']:
-                        markup.add(types.InlineKeyboardButton("✅ فك الحظر", callback_data=f"admin_quick_unban_{target}"))
-                    else:
-                        markup.add(types.InlineKeyboardButton("🚫 حظر", callback_data=f"admin_quick_ban_{target}"))
-                    markup.add(types.InlineKeyboardButton("📨 إرسال رسالة", callback_data=f"admin_quick_msg_{target}"))
-                    bot.send_message(chat_id, info, reply_markup=markup, parse_mode='HTML')
-                else:
-                    bot.send_message(chat_id, "❌ لم يتم العثور على المستخدم.")
-            except Exception:
-                bot.send_message(chat_id, "❌ يرجى إرسال ID رقمي صحيح.")
-        clear_state(user_id)
-        return
-
-    if state == 'admin_announcement_text':
-        if not is_admin(user_id):
-            return
-        if message.content_type == 'text':
-            set_announcement(text.strip())
-            bot.send_message(chat_id, "✅ تم تعيين الإعلان المثبت بنجاح.")
-        clear_state(user_id)
-        return
-
-    if state == 'admin_set_price_value':
-        if message.content_type == 'text':
-            skey = get_data(user_id, 'price_service_key')
-            try:
-                new_price = float(text.strip())
+                new_p = float(text.strip())
                 conn = get_db_connection()
-                conn.execute('INSERT OR REPLACE INTO service_prices (service_key, price) VALUES (?, ?)',
-                             (skey, new_price))
+                conn.execute('INSERT OR REPLACE INTO service_prices (service_key, price) VALUES (?, ?)', (skey, new_p))
                 conn.commit()
                 conn.close()
-                bot.send_message(chat_id, f"✅ تم تحديث سعر الخدمة {skey} إلى {new_price} جنيه.")
+                bot.send_message(chat_id, f"✅ تم تعديل سعر خدمة {skey} إلى {new_p} جنيه.")
             except Exception:
-                bot.send_message(chat_id, "❌ يرجى إرسال سعر رقمي صحيح.")
+                bot.send_message(chat_id, "❌ يرجى إرسال رقم صحيح بالسعر.")
         clear_state(user_id)
         return
 
-    if state.startswith('dev_reply_text_'):
-        order_id = state.replace('dev_reply_text_', '')
+    if state == 'dev_reply_order':
+        order_id = get_data(user_id, 'dev_reply_order_id')
         conn = get_db_connection()
-        order = conn.execute('SELECT * FROM orders WHERE id=?', (order_id,)).fetchone()
+        row = conn.execute("SELECT user_id FROM orders WHERE id=?", (order_id,)).fetchone()
         conn.close()
-        if order:
+        if row:
+            try:
+                bot.send_message(row['user_id'], f"💬 رسالة بخصوص الطلب #{order_id}:\n\n{text}")
+                bot.send_message(chat_id, f"✅ تم إرسال الرسالة للعميل {row['user_id']}")
+            except Exception as e:
+                bot.send_message(chat_id, f"❌ فشل إرسال الرسالة: {e}")
+        clear_state(user_id)
+        return
+
+    if state == 'dev_deliver_order':
+        order_id = get_data(user_id, 'dev_deliver_order_id')
+        conn = get_db_connection()
+        row = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        if row:
+            conn.execute("UPDATE orders SET status='accepted' WHERE id=?", (order_id,))
+            conn.commit()
             try:
                 if message.content_type == 'text':
-                    bot.send_message(order['user_id'], f"💬 رسالة من الإدارة حول طلبك #{order_id}:\n\n{text}")
-                elif message.content_type == 'photo':
-                    bot.send_photo(order['user_id'], message.photo[-1].file_id,
-                                   caption=f"💬 رسالة من الإدارة حول طلبك #{order_id}:\n\n{message.caption or ''}")
-                bot.send_message(chat_id, f"✅ تم إرسال الرد للعميل للطلب #{order_id}")
-            except Exception as e:
-                bot.send_message(chat_id, f"❌ فشل الإرسال: {e}")
-        clear_state(user_id)
-        return
-
-    if state.startswith('ticket_reply_text_'):
-        ticket_id = state.replace('ticket_reply_text_', '')
-        conn = get_db_connection()
-        ticket = conn.execute('SELECT * FROM tickets WHERE id=?', (ticket_id,)).fetchone()
-        conn.close()
-        if ticket:
-            try:
-                if message.content_type == 'text':
-                    bot.send_message(ticket['user_id'], f"💬 رد الدعم الفني على تذكرتك #{ticket_id}:\n\n{text}")
-                elif message.content_type == 'photo':
-                    bot.send_photo(ticket['user_id'], message.photo[-1].file_id,
-                                   caption=f"💬 رد الدعم الفني على تذكرتك #{ticket_id}:\n\n{message.caption or ''}")
-                conn = get_db_connection()
-                conn.execute("UPDATE tickets SET status='closed' WHERE id=?", (ticket_id,))
-                conn.commit()
-                conn.close()
-                bot.send_message(chat_id, f"✅ تم الرد وإغلاق التذكرة #{ticket_id}")
-            except Exception as e:
-                bot.send_message(chat_id, f"❌ فشل الإرسال: {e}")
-        clear_state(user_id)
-        return
-
-    if state.startswith('sec_deliver_file_'):
-        order_id = state.replace('sec_deliver_file_', '')
-        conn = get_db_connection()
-        order = conn.execute('SELECT * FROM orders WHERE id=?', (order_id,)).fetchone()
-        conn.close()
-        if order:
-            try:
-                client_id = order['user_id']
-                if message.content_type == 'photo':
-                    bot.send_photo(client_id, message.photo[-1].file_id,
-                                   caption=f"📦 تم تسليم طلبك #{order_id}:\n\n{message.caption or ''}")
+                    bot.send_message(row['user_id'], f"📦 <b>تم تسليم طلبك #{order_id}</b>\n\n{text}", parse_mode='HTML')
                 elif message.content_type == 'document':
-                    bot.send_document(client_id, message.document.file_id,
-                                      caption=f"📦 تم تسليم طلبك #{order_id}:\n\n{message.caption or ''}")
-                elif message.content_type == 'text':
-                    bot.send_message(client_id, f"📦 تم تسليم طلبك #{order_id}:\n\n{text}")
-
-                conn = get_db_connection()
-                conn.execute("UPDATE orders SET status='accepted' WHERE id=?", (order_id,))
-                conn.commit()
-                conn.close()
-
-                rate_markup = types.InlineKeyboardMarkup()
-                rate_markup.add(
-                    types.InlineKeyboardButton("⭐ 1", callback_data=f"dev_rate_1_{order_id}"),
-                    types.InlineKeyboardButton("⭐ 2", callback_data=f"dev_rate_2_{order_id}"),
-                    types.InlineKeyboardButton("⭐ 3", callback_data=f"dev_rate_3_{order_id}"),
-                    types.InlineKeyboardButton("⭐ 4", callback_data=f"dev_rate_4_{order_id}"),
-                    types.InlineKeyboardButton("⭐ 5", callback_data=f"dev_rate_5_{order_id}")
-                )
-                bot.send_message(client_id, "🌟 يرجى تقييم الخدمة المدمة لك:", reply_markup=rate_markup)
-                bot.send_message(chat_id, f"✅ تم تسليم الطلب #{order_id} وإشعار العميل.")
+                    bot.send_document(row['user_id'], message.document.file_id, caption=f"📦 تم تسليم طلبك #{order_id}\n\n{message.caption or ''}")
+                elif message.content_type == 'photo':
+                    bot.send_photo(row['user_id'], message.photo[-1].file_id, caption=f"📦 تم تسليم طلبك #{order_id}\n\n{message.caption or ''}")
+                bot.send_message(chat_id, f"✅ تم تغيير حالة الطلب #{order_id} لمقبول وتسليمه للمستخدم.")
+                u_info = conn.execute("SELECT first_name FROM users WHERE user_id=?", (row['user_id'],)).fetchone()
+                cname = u_info['first_name'] if u_info else str(row['user_id'])
+                post_delivery_to_trust_channel(row, cname)
             except Exception as e:
-                bot.send_message(chat_id, f"❌ فشل تسليم الطلب: {e}")
+                bot.send_message(chat_id, f"❌ حدث خطأ أثناء التسليم: {e}")
+        conn.close()
         clear_state(user_id)
         return
+
+    if state == 'dev_ticket_reply':
+        ticket_id = get_data(user_id, 'dev_reply_ticket_id')
+        conn = get_db_connection()
+        t_row = conn.execute("SELECT user_id FROM tickets WHERE id=?", (ticket_id,)).fetchone()
+        if t_row:
+            conn.execute("UPDATE tickets SET status='closed' WHERE id=?", (ticket_id,))
+            conn.commit()
+            try:
+                bot.send_message(t_row['user_id'], f"🎫 <b>رد الدعم الفني على التذكرة #{ticket_id}:</b>\n\n{text}", parse_mode='HTML')
+                bot.send_message(chat_id, f"✅ تم إرسال الرد للعميل {t_row['user_id']} وإغلاق التذكرة.")
+            except Exception as e:
+                bot.send_message(chat_id, f"❌ فشل إرسال الرد: {e}")
+        conn.close()
+        clear_state(user_id)
+        return
+
 
 @bot.callback_query_handler(func=lambda call: True)
-def handle_callback_query(call):
+def handle_all_callbacks(call):
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     msg_id = call.message.message_id
@@ -2369,14 +2299,13 @@ def handle_callback_query(call):
         is_ok, not_subscribed = check_subscription(user_id)
         if is_ok:
             bot.answer_callback_query(call.id, "✅ شكراً لاشتراكك!")
-            clear_state(user_id)
             try:
                 bot.delete_message(chat_id, msg_id)
             except Exception:
                 pass
             send_main_menu(chat_id, user_id)
         else:
-            bot.answer_callback_query(call.id, "❌ لم تشترك في كافة القنوات بعد!", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ لم تشترك في كل القنوات بعد!", show_alert=True)
         return
 
     if data == "back_main":
@@ -2389,86 +2318,75 @@ def handle_callback_query(call):
         send_main_menu(chat_id, user_id)
         return
 
-    # User main menu navigation
+    # navigation sections
     if data == "section_vodafone":
-        text = "📱 <b>قسم خدمات فودافون</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'vodafone', text, vodafone_markup())
+        send_section_with_image(chat_id, msg_id, 'vodafone', "📱 أهلاً بك في قسم فودافون. اختر الخدمة المطلوبة:", vodafone_markup())
+        return
+    elif data == "section_we":
+        send_section_with_image(chat_id, msg_id, 'we', "🌐 أهلاً بك في قسم وي. اختر الخدمة المطلوبة:", we_markup())
+        return
+    elif data == "section_natera":
+        send_section_with_image(chat_id, msg_id, 'natera', "🧙 أهلاً بك في قسم النترا. اختر الخدمة المطلوبة:", natera_markup())
+        return
+    elif data == "section_orange":
+        send_section_with_image(chat_id, msg_id, 'orange', "✨ أهلاً بك في قسم أورنج. اختر الخدمة المطلوبة:", orange_markup())
+        return
+    elif data == "section_etisalat":
+        send_section_with_image(chat_id, msg_id, 'etisalat', "📡 أهلاً بك في قسم اتصالات. اختر الخدمة المطلوبة:", etisalat_markup())
+        return
+    elif data == "section_tamween":
+        if is_section_disabled('tamween'):
+            send_section_with_image(chat_id, msg_id, 'tamween', "", None)
+            return
+        start_service_flow(chat_id, user_id, 'tamween')
         return
 
-    if data == "section_we":
-        text = "🌐 <b>قسم خدمات وي</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'we', text, we_markup())
-        return
-
-    if data == "section_natera":
-        text = "🧙 <b>قسم خدمات نترا</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'natera', text, natera_markup())
-        return
-
-    if data == "section_orange":
-        text = "✨ <b>قسم خدمات أورنج</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'orange', text, orange_markup())
-        return
-
-    if data == "section_etisalat":
-        text = "📡 <b>قسم خدمات اتصالات</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'etisalat', text, etisalat_markup())
-        return
-
-    if data == "section_tamween":
-        text = "🌾 <b>قسم خدمات تموين</b>\nاختر الخدمة المطلوبة:"
-        send_section_with_image(chat_id, msg_id, 'tamween', text, etisalat_markup())
-        return
-
-    if data.startswith("service_"):
-        service_key = data.replace("service_", "")
-        if service_key in SERVICES:
-            try:
-                bot.delete_message(chat_id, msg_id)
-            except Exception:
-                pass
-            start_service_flow(chat_id, user_id, service_key)
-        else:
-            bot.answer_callback_query(call.id, "الخدمة غير متاحة حالياً.")
-        return
-
-    if data == "we_cards_section":
+    elif data == "we_cards_section":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📱 وي - فودافون", callback_data="service_we_cards_vodafone"))
-        markup.add(types.InlineKeyboardButton("🌐 وي - وي", callback_data="service_we_cards_we"))
-        markup.add(types.InlineKeyboardButton("📡 وي - اتصالات", callback_data="service_we_cards_etisalat"))
-        markup.add(types.InlineKeyboardButton("✨ وي - أورنج", callback_data="service_we_cards_orange"))
-        markup.add(types.InlineKeyboardButton("🧙 وي - نترا", callback_data="service_we_cards_natera"))
-        markup.add(types.InlineKeyboardButton("🌾 وي - تموين", callback_data="service_we_cards_tamween"))
-        markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="section_we"))
+        cards_services = [
+            ('we_cards_vodafone', 'بطاقات وي - فودافون'),
+            ('we_cards_we', 'بطاقات وي - وي'),
+            ('we_cards_etisalat', 'بطاقات وي - اتصالات'),
+            ('we_cards_orange', 'بطاقات وي - أورنج'),
+            ('we_cards_natera', 'بطاقات وي - نترا'),
+            ('we_cards_tamween', 'بطاقات وي - تموين')
+        ]
+        for key, label in cards_services:
+            markup.add(types.InlineKeyboardButton(label, callback_data=f"service_{key}"))
+        markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="section_we", style='danger', icon_custom_emoji_id=E_BACK))
         try:
-            bot.edit_message_caption("🔑 اختر نوع بطاقات وي:", chat_id=chat_id, message_id=msg_id, reply_markup=markup)
+            bot.edit_message_caption("🔑 اختر نوع بطاقات وي التي تريد سحبها:", chat_id=chat_id, message_id=msg_id, reply_markup=markup)
         except Exception:
-            bot.edit_message_text("🔑 اختر نوع بطاقات وي:", chat_id=chat_id, message_id=msg_id, reply_markup=markup)
+            bot.send_message(chat_id, "🔑 اختر نوع بطاقات وي التي تريد سحبها:", reply_markup=markup)
         return
 
+    # services trigger
+    if data.startswith("service_"):
+        skey = data.replace("service_", "")
+        if skey in SERVICES:
+            sec = SERVICES[skey]['section']
+            if is_section_disabled(sec):
+                send_section_with_image(chat_id, msg_id, sec, "", None)
+                return
+            start_service_flow(chat_id, user_id, skey)
+        return
+
+    # order confirmation
     if data.startswith("confirm_order_"):
         cancel_countdown(user_id)
         order_data = get_data(user_id, 'order_data')
         if order_data:
             notify_developer_order(chat_id, user_id, order_data)
             clear_state(user_id)
-            bot.answer_callback_query(call.id, "✅ تم تأكيد طلبك وإرساله للإدارة!")
+            bot.answer_callback_query(call.id, "✅ تم تأكيد الطلب وإرساله للمراجعة.")
             try:
-                bot.edit_message_caption("✅ <b>تم تأكيد إرسال الطلب بنجاح!</b>\nسيتم مراجعته والتنفيذ قريباً.",
-                                         chat_id=chat_id, message_id=msg_id)
+                bot.edit_message_caption("✅ تم إرسال طلبك بنجاح وسيتعامل معه الفريق المختص قريباً.", chat_id=chat_id, message_id=msg_id)
             except Exception:
-                bot.edit_message_text("✅ <b>تم تأكيد إرسال الطلب بنجاح!</b>\nسيتم مراجعته والتنفيذ قريباً.",
-                                      chat_id=chat_id, message_id=msg_id)
-        else:
-            bot.answer_callback_query(call.id, "حدث خطأ أو انتهت الجلسة.", show_alert=True)
+                bot.send_message(chat_id, "✅ تم إرسال طلبك بنجاح وسيتعامل معه الفريق المختص قريباً.")
         return
 
     if data == "cancel_order":
         cancel_countdown(user_id)
-        order_id = get_data(user_id, 'order_id')
-        if order_id:
-            delete_order_by_id(order_id)
         clear_state(user_id)
         bot.answer_callback_query(call.id, "❌ تم إلغاء الطلب.")
         try:
@@ -2478,274 +2396,235 @@ def handle_callback_query(call):
         send_main_menu(chat_id, user_id)
         return
 
+    # my orders
     if data == "section_orders":
         conn = get_db_connection()
-        orders = conn.execute("SELECT * FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 10", (user_id,)).fetchall()
+        rows = conn.execute("SELECT * FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 5", (user_id,)).fetchall()
         conn.close()
-        if not orders:
-            try:
-                bot.edit_message_text("📭 ليس لديك طلبات سابقة.", chat_id=chat_id, message_id=msg_id, reply_markup=orders_markup())
-            except Exception:
-                bot.send_message(chat_id, "📭 ليس لديك طلبات سابقة.", reply_markup=orders_markup())
-        else:
-            text = "📋 <b>طلباتك الأخيرة:</b>\n\n"
-            for o in orders:
-                st = "⏳ قيد المراجعة" if o['status'] == 'pending' else ("✅ مقبول" if o['status'] == 'accepted' else "❌ مرفوض")
-                text += f"▪️ طلب #{o['id']} - {o['service_name']} | الحالة: {st}\n"
-            try:
-                bot.edit_message_text(text, chat_id=chat_id, message_id=msg_id, reply_markup=orders_markup(), parse_mode='HTML')
-            except Exception:
-                bot.send_message(chat_id, text, reply_markup=orders_markup(), parse_mode='HTML')
+
+        if not rows:
+            bot.send_message(chat_id, "📭 ليس لديك أي طلبات حالياً.", reply_markup=orders_markup())
+            return
+
+        text = "📋 <b>قائمة طلباتك الأخيرة:</b>\n\n"
+        status_map = {'pending': '⏳ قيد المراجعة', 'accepted': '✅ مقبول', 'rejected': '❌ مرفوض'}
+        for r in rows:
+            text += f"▪️ طلب #{r['id']} ({r['service_name']})\n   الحالة: {status_map.get(r['status'], r['status'])}\n   المبلغ: {r['price']} ج\n\n"
+        
+        bot.send_message(chat_id, text, reply_markup=orders_markup())
         return
 
+    # referrals
     if data == "section_referrals":
-        ref_cnt = get_referral_count(user_id)
-        bot_username = bot.get_me().username
-        link = f"https://t.me/{bot_username}?start={user_id}"
+        me = bot.get_me()
+        ref_link = f"https://t.me/{me.username}?start={user_id}"
+        cnt = get_referral_count(user_id)
         last_ref = get_last_referral(user_id)
         text = (
-            f"👥 <b>نظام الإحالات الخاص بك</b>\n\n"
-            f"🔗 رابط الإحالة:\n<code>{link}</code>\n\n"
-            f"📊 عدد الأشخاص المنضمين عبرك: {ref_cnt}\n"
-            f"📅 آخر انضمام: {last_ref}"
+            f"🎁 <b>نظام الإحالة والربح</b>\n\n"
+            f"🔗 رابط الإحالة الخاص بك:\n<code>{ref_link}</code>\n\n"
+            f"👥 عدد الأشخاص الذين سجلوا عن طريقك: {cnt}\n"
+            f"🕒 آخر إحالة: {last_ref}"
         )
-        try:
-            bot.edit_message_text(text, chat_id=chat_id, message_id=msg_id, reply_markup=referrals_markup(), parse_mode='HTML')
-        except Exception:
-            bot.send_message(chat_id, text, reply_markup=referrals_markup(), parse_mode='HTML')
+        bot.send_message(chat_id, text, reply_markup=referrals_markup())
         return
 
+    # support section
     if data == "section_support":
-        try:
-            bot.edit_message_text("🛠 <b>قسم الدعم الفني</b>\nاختر نوع التذكرة:", chat_id=chat_id, message_id=msg_id, reply_markup=support_markup())
-        except Exception:
-            bot.send_message(chat_id, "🛠 <b>قسم الدعم الفني</b>\nاختر نوع التذكرة:", reply_markup=support_markup())
+        bot.send_message(chat_id, "📞 أهلاً بك في قسم الدعم الفني. اختر سبب التواصل:", reply_markup=support_markup())
         return
 
     if data.startswith("support_"):
-        ttype = data.replace("support_", "")
-        type_names = {'withdrawal': 'مشكلة في السحب', 'inquiry': 'استفسار عام', 'suspicious': 'بيانات مشكوك بها'}
-        tname = type_names.get(ttype, ttype)
-        set_state(user_id, 'support_message', ticket_type=tname, support_photos=[], support_text='')
-        bot.send_message(chat_id, f"📝 أرسل التفاصيل والجمَل أو الصور لتذكرة ({tname}).\nعند الانتهاء اكتب كلمة \"تم\".")
+        stype = data.replace("support_", "")
+        types_map = {'withdrawal': 'مشكلة في السحب', 'inquiry': 'استفسار عام', 'suspicious': 'بيانات مشكوك بها'}
+        set_state(user_id, 'support_message', ticket_type=types_map.get(stype, stype), support_photos=[], support_text="")
+        bot.send_message(chat_id, f"📝 أرسل الآن تفاصيل المشكلة أو الصور الخاصة بـ ({types_map.get(stype, stype)}).\nوعند الانتهاء أرسل كلمة \"تم\".")
         return
 
-    # Admin Control Handlers
-    if data == "section_admin":
-        if is_admin(user_id):
-            try:
-                bot.edit_message_text("⚙️ <b>لوحة تحكم الأدمن الكامل</b>", chat_id=chat_id, message_id=msg_id, reply_markup=admin_markup())
-            except Exception:
-                bot.send_message(chat_id, "⚙️ <b>لوحة تحكم الأدمن الكامل</b>", reply_markup=admin_markup())
-        elif is_section_admin_any(user_id):
-            try:
-                bot.edit_message_text("⚙️ <b>لوحة تحكم أدمن القسم</b>", chat_id=chat_id, message_id=msg_id, reply_markup=section_admin_markup())
-            except Exception:
-                bot.send_message(chat_id, "⚙️ <b>لوحة تحكم أدمن القسم</b>", reply_markup=section_admin_markup())
-        return
-
-    # Developer/Admin Order actions
+    # developer & admin handling
     if data.startswith("dev_accept_") or data.startswith("sec_accept_"):
-        order_id = data.split("_")[-1]
+        oid = int(data.split('_')[-1])
         conn = get_db_connection()
-        conn.execute("UPDATE orders SET status='accepted' WHERE id=?", (order_id,))
-        order = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        conn.execute("UPDATE orders SET status='accepted' WHERE id=?", (oid,))
         conn.commit()
+        row = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         conn.close()
-
-        bot.answer_callback_query(call.id, "✅ تم قبول الطلب!")
-        if order:
+        bot.answer_callback_query(call.id, "✅ تم قبول الطلب.")
+        if row:
             try:
-                bot.send_message(order['user_id'], f"✅ تم قبول طلبك #{order_id} وجاري تنفيذه!")
+                bot.send_message(row['user_id'], f"🎉 <b>تم قبول طلبك #{oid} بنجاح!</b>", parse_mode='HTML')
             except Exception:
                 pass
         return
 
     if data.startswith("dev_reject_") or data.startswith("sec_reject_"):
-        order_id = data.split("_")[-1]
+        oid = int(data.split('_')[-1])
         conn = get_db_connection()
-        conn.execute("UPDATE orders SET status='rejected' WHERE id=?", (order_id,))
-        order = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        conn.execute("UPDATE orders SET status='rejected' WHERE id=?", (oid,))
         conn.commit()
+        row = conn.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         conn.close()
-
-        bot.answer_callback_query(call.id, "❌ تم رفض الطلب!")
-        if order:
+        bot.answer_callback_query(call.id, "❌ تم رفض الطلب.")
+        if row:
             try:
-                bot.send_message(order['user_id'], f"❌ للأسف تم رفض طلبك #{order_id}.")
+                bot.send_message(row['user_id'], f"❌ <b>عذراً، تم رفض طلبك #{oid}.</b>", parse_mode='HTML')
             except Exception:
                 pass
         return
 
     if data.startswith("dev_reply_"):
-        order_id = data.replace("dev_reply_", "")
-        set_state(user_id, f"dev_reply_text_{order_id}")
-        bot.send_message(chat_id, f"✏️ اكتب الرسالة للرد على العميل لطلب #{order_id}:")
-        return
-
-    if data.startswith("dev_ticket_reply_"):
-        ticket_id = data.replace("dev_ticket_reply_", "")
-        set_state(user_id, f"ticket_reply_text_{ticket_id}")
-        bot.send_message(chat_id, f"✏️ اكتب الرسالة للرد على التذكرة #{ticket_id}:")
+        oid = int(data.split('_')[-1])
+        set_state(user_id, 'dev_reply_order', dev_reply_order_id=oid)
+        bot.send_message(chat_id, f"✏️ اكتب الرسالة التي تريد إرسالها للعميل بخصوص الطلب #{oid}:")
         return
 
     if data.startswith("sec_deliver_"):
-        order_id = data.replace("sec_deliver_", "")
-        set_state(user_id, f"sec_deliver_file_{order_id}")
-        bot.send_message(chat_id, f"📦 أرسل الملف/الصورة أو النص المراد تسليمه للعميل للطلب #{order_id}:")
+        oid = int(data.split('_')[-1])
+        set_state(user_id, 'dev_deliver_order', dev_deliver_order_id=oid)
+        bot.send_message(chat_id, f"📦 أرسل ملف التسليم أو التفاصيل الخاصة بالطلب #{oid}:")
         return
 
-    if data.startswith("dev_rate_"):
-        parts = data.split("_")
-        rating = parts[2]
-        order_id = parts[3]
-        conn = get_db_connection()
-        order = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
-        user_row = conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
-        conn.close()
-
-        client_name = user_row['first_name'] if user_row else "عميل"
-        star_map = {'1': '⭐', '2': '⭐⭐', '3': '⭐⭐⭐', '4': '⭐⭐⭐⭐', '5': '⭐⭐⭐⭐⭐'}
-        post_to_trust_channel(order, client_name, star_map.get(rating, '⭐'))
-        bot.answer_callback_query(call.id, "شكراً لتقييمك! ❤️")
-        try:
-            bot.delete_message(chat_id, msg_id)
-        except Exception:
-            pass
+    if data.startswith("dev_ticket_reply_"):
+        tid = int(data.split('_')[-1])
+        set_state(user_id, 'dev_ticket_reply', dev_reply_ticket_id=tid)
+        bot.send_message(chat_id, f"💬 اكتب ردك على التذكرة #{tid}:")
         return
 
-    if data == "admin_maintenance_toggle":
-        if not is_admin(user_id):
-            return
-        curr = is_maintenance_mode()
-        set_setting('maintenance_mode', '0' if curr else '1')
-        bot.answer_callback_query(call.id, "تم تغيير حالة الصيانة")
-        try:
-            bot.edit_message_reply_markup(chat_id, msg_id, reply_markup=admin_markup())
-        except Exception:
-            pass
+    # Admin Control Panel Callbacks
+    if not is_admin(user_id) and not is_section_admin_any(user_id):
         return
 
-    if data == "admin_broadcast":
-        if not is_admin(user_id):
-            return
-        set_state(user_id, 'admin_broadcast')
-        bot.send_message(chat_id, "📢 أرسل الرسالة/الصورة لتوزيعها على الجميع:")
-        return
-
-    if data == "admin_announcement":
-        if not is_admin(user_id):
-            return
-        set_state(user_id, 'admin_announcement_text')
-        bot.send_message(chat_id, "📣 أرسل نص الإعلان المثبت الجديد:")
+    if data == "section_admin":
+        if is_admin(user_id):
+            bot.send_message(chat_id, "⚙️ مرحباً بك في لوحة تحكم الأدمن الرئيسي:", reply_markup=admin_markup())
+        else:
+            bot.send_message(chat_id, "⚙️ مرحباً بك في لوحة تحكم مشرف القسم:", reply_markup=section_admin_markup())
         return
 
     if data == "admin_stats":
-        if not is_admin(user_id):
-            return
         u_cnt = get_user_count()
         o_cnt = get_all_orders_count()
-        a_cnt = get_accepted_orders_count()
-        d_inc = get_daily_income()
-        m_inc = get_monthly_income()
-        stats_text = (
+        acc_cnt = get_accepted_orders_count()
+        pend_cnt = get_orders_pending_count()
+        daily_inc = get_daily_income()
+        monthly_inc = get_monthly_income()
+        rej_rate = get_rejection_rate()
+
+        text = (
             f"📊 <b>إحصائيات البوت العامة</b>\n\n"
             f"👥 عدد المستخدمين: {u_cnt}\n"
             f"📦 إجمالي الطلبات: {o_cnt}\n"
-            f"✅ الطلبات المقبولة: {a_cnt}\n"
-            f"💰 دخل اليوم: {d_inc} جنيه\n"
-            f"💰 دخل الشهر: {m_inc} جنيه"
+            f"✅ الطلبات المقبولة: {acc_cnt}\n"
+            f"⏳ الطلبات المعلقة: {pend_cnt}\n"
+            f"❌ نسبة الرفض: {rej_rate}%\n\n"
+            f"💰 دخل اليوم: {daily_inc} جنيه\n"
+            f"💰 دخل الشهر: {monthly_inc} جنيه"
         )
-        bot.send_message(chat_id, stats_text, parse_mode='HTML')
+        bot.send_message(chat_id, text)
         return
 
-    if data == "admin_change_cash":
-        markup = types.InlineKeyboardMarkup()
-        for k, name in SECTION_ARABIC_NAMES.items():
-            markup.add(types.InlineKeyboardButton(f"تغيير كاش {name}", callback_data=f"admin_change_cash_sec_{k}"))
-        bot.send_message(chat_id, "اختر القسم لتغيير رقم الكاش:", reply_markup=markup)
+    if data == "admin_broadcast":
+        set_state(user_id, 'admin_broadcast')
+        bot.send_message(chat_id, "📢 أرسل الرسالة/الصورة/الفيديو التي تريد إرسالها لجميع المستخدمين:")
         return
 
-    if data.startswith("admin_change_cash_sec_"):
-        sec = data.replace("admin_change_cash_sec_", "")
-        set_state(user_id, 'admin_change_cash', cash_section=sec)
-        bot.send_message(chat_id, f"💰 أرسل رقم الكاش الجديد لقسم {SECTION_ARABIC_NAMES.get(sec, sec)}:")
+    if data == "admin_edit_welcome":
+        set_state(user_id, 'admin_edit_welcome')
+        bot.send_message(chat_id, "✏️ أرسل نص رسالة الترحيب الجديد (يمكنك استخدام {name} لاستهداف اسم العميل):")
         return
 
-    if data == "admin_change_price":
-        markup = types.InlineKeyboardMarkup()
-        for skey, sdata in SERVICES.items():
-            markup.add(types.InlineKeyboardButton(f"تعديل {sdata['name']}", callback_data=f"admin_set_price_{skey}"))
-        bot.send_message(chat_id, "اختر الخدمة لتعديل سعرها:", reply_markup=markup)
+    if data == "admin_edit_image":
+        set_state(user_id, 'admin_edit_image')
+        bot.send_message(chat_id, "🖼 أرسل رابط الصورة الجديدة للترحيب:")
         return
 
-    if data.startswith("admin_set_price_"):
-        skey = data.replace("admin_set_price_", "")
-        set_state(user_id, 'admin_set_price_value', price_service_key=skey)
-        bot.send_message(chat_id, f"💲 أرسل السعر الجديد لـ {skey}:")
+    if data == "admin_trust_channel":
+        set_state(user_id, 'admin_trust_channel')
+        bot.send_message(chat_id, "📡 أرسل ID قناة الثقة (مثل -100xxxxxxxxx):")
         return
 
-    if data == "admin_search_user":
-        if not is_admin(user_id):
-            return
-        set_state(user_id, 'admin_search_user_id')
-        bot.send_message(chat_id, "🔍 أرسل ID المستخدم للبحث عنه:")
+    if data == "admin_support_account":
+        set_state(user_id, 'admin_support_account')
+        bot.send_message(chat_id, "👤 أرسل اسم المستخدم الجديد لحساب الدعم (مثال: @support):")
         return
 
     if data == "admin_ban":
-        if not is_admin(user_id):
-            return
         set_state(user_id, 'admin_ban_id')
         bot.send_message(chat_id, "🚫 أرسل ID المستخدم المراد حظره:")
         return
 
     if data == "admin_unban":
-        if not is_admin(user_id):
-            return
         set_state(user_id, 'admin_unban_id')
         bot.send_message(chat_id, "✅ أرسل ID المستخدم المراد فك حظره:")
         return
 
     if data == "admin_msg_user":
-        if not is_admin(user_id):
-            return
         set_state(user_id, 'admin_msg_user_id')
-        bot.send_message(chat_id, "📨 أرسل ID المستخدم المراد مراسلته:")
+        bot.send_message(chat_id, "✉️ أرسل ID المستخدم المراد مراسلته:")
         return
 
-    if data.startswith("admin_quick_ban_"):
-        if not is_admin(user_id):
-            return
-        target = int(data.replace("admin_quick_ban_", ""))
-        conn = get_db_connection()
-        conn.execute('UPDATE users SET is_banned = 1 WHERE user_id = ?', (target,))
-        conn.commit()
-        conn.close()
-        bot.answer_callback_query(call.id, "✅ تم حظر المستخدم!")
+    if data == "admin_change_price":
+        markup = types.InlineKeyboardMarkup()
+        for skey, sval in SERVICES.items():
+            markup.add(types.InlineKeyboardButton(f"{sval['name']} ({get_service_price(skey)} ج)", callback_data=f"admin_set_price_{skey}"))
+        markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="section_admin"))
+        bot.send_message(chat_id, "💲 اختر الخدمة المراد تعديل سعرها:", reply_markup=markup)
         return
 
-    if data.startswith("admin_quick_unban_"):
-        if not is_admin(user_id):
-            return
-        target = int(data.replace("admin_quick_unban_", ""))
-        conn = get_db_connection()
-        conn.execute('UPDATE users SET is_banned = 0 WHERE user_id = ?', (target,))
-        conn.commit()
-        conn.close()
-        bot.answer_callback_query(call.id, "✅ تم فك الحظر!")
+    if data.startswith("admin_set_price_"):
+        skey = data.replace("admin_set_price_", "")
+        set_state(user_id, 'admin_set_price', price_service_key=skey)
+        bot.send_message(chat_id, f"✏️ أرسل السعر الجديد لخدمة {skey}:")
         return
 
-    if data.startswith("admin_quick_msg_"):
-        if not is_admin(user_id):
-            return
-        target = int(data.replace("admin_quick_msg_", ""))
-        set_state(user_id, 'admin_msg_user_text', msg_target_id=target)
-        bot.send_message(chat_id, f"✏️ أرسل الرسالة للمستخدم {target}:")
+    if data == "admin_change_cash":
+        markup = types.InlineKeyboardMarkup()
+        for skey, sname in SECTION_ARABIC_NAMES.items():
+            markup.add(types.InlineKeyboardButton(f"قسم {sname}", callback_data=f"admin_change_cash_sec_{skey}"))
+        bot.send_message(chat_id, "💰 اختر القسم لتغيير رقم الكاش:", reply_markup=markup)
         return
+
+    if data.startswith("admin_change_cash_sec_"):
+        skey = data.replace("admin_change_cash_sec_", "")
+        set_state(user_id, 'admin_change_cash', cash_section=skey)
+        bot.send_message(chat_id, f"📱 أرسل رقم الكاش الجديد لقسم {SECTION_ARABIC_NAMES.get(skey, skey)}:")
+        return
+
+    if data == "admin_maintenance_toggle":
+        curr = is_maintenance_mode()
+        set_setting('maintenance_mode', '0' if curr else '1')
+        status = "إيقاف وضع الصيانة 🟢" if curr else "تفعيل وضع الصيانة 🔴"
+        bot.answer_callback_query(call.id, f"تم {status}")
+        bot.send_message(chat_id, f"✅ تم {status}")
+        return
+
+    if data == "admin_toggle_sections":
+        markup = types.InlineKeyboardMarkup()
+        for skey, sname in SECTION_ARABIC_NAMES.items():
+            dis = is_section_disabled(skey)
+            status_text = "🔴 معطل" if dis else "🟢 شغال"
+            markup.add(types.InlineKeyboardButton(f"قسم {sname} [{status_text}]", callback_data=f"admin_toggle_sec_{skey}"))
+        markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="section_admin"))
+        bot.send_message(chat_id, "⏸ اختر القسم للتشغيل/الإيقاف:", reply_markup=markup)
+        return
+
+    if data.startswith("admin_toggle_sec_"):
+        skey = data.replace("admin_toggle_sec_", "")
+        curr = is_section_disabled(skey)
+        set_setting(f'section_disabled_{skey}', '0' if curr else '1')
+        bot.answer_callback_query(call.id, "تم تغيير حالة القسم.")
+        bot.send_message(chat_id, f"✅ تم تغيير حالة قسم {SECTION_ARABIC_NAMES.get(skey, skey)}.")
+        return
+
+    bot.answer_callback_query(call.id)
 
 
 if __name__ == '__main__':
-    print("⏳ جاري تشغيل البوت...")
     init_database()
-    print("✅ تم تجهيز قاعدة البيانات وتطبيق التغييرات بنجاح.")
-    bot.infinity_polling(skip_pending=True)
+    print("Bot is started and database is initialized...")
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=0, timeout=20)
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            time.sleep(3)
